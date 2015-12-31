@@ -127,7 +127,11 @@ class Redis(AbstractDatabase):
         return self.r.exists(key)
 
     def __getitem__(self, key):
-        return self.r.get(key)
+        res = self.r.get(key)
+        if res is None:
+            raise KeyError("The key '{}' is not present in the database.".format(key))
+        else:
+            return res
 
     def __setitem__(self, key, item):
         res = self.r.set(key, item)
@@ -135,7 +139,9 @@ class Redis(AbstractDatabase):
             raise RuntimeError("The database assignment failed.")
 
     def __delitem__(self, key):
-        self.r.delete(key)
+        res = self.r.delete(key)
+        if res == 0:
+            raise KeyError("The key '{}' is not present in the database.".format(key))
 
     def __getattr__(self, attr):
         return getattr(self.r, attr)
@@ -180,9 +186,10 @@ class Redis(AbstractDatabase):
             return 5
  
         key = "minqlx:players:{}:permission".format(steam_id)
-        perm = self[key]
-        if perm == None:
-            return 0
+        try:
+            perm = self[key]
+        except KeyError:
+            perm = "0"
 
         return int(perm)
 
@@ -232,10 +239,9 @@ class Redis(AbstractDatabase):
         else:
             key = "minqlx:players:{0}:flags:{1}".format(player, flag)
 
-        val = self[key]
-        if val:
-            return bool(int(val))
-        else:
+        try:
+            return bool(int(self[key]))
+        except KeyError:
             return default
 
     def connect(self, host=None, database=0, unix_socket=False, password=None):

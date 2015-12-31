@@ -98,6 +98,8 @@ def handle_client_command(client_id, cmd):
         if res and not minqlx.Plugin.is_vote_active():
             vote = res.group("cmd")
             args = res.group("args") if res.group("args") else ""
+            # Set the caller for vote_started in case the vote goes through.
+            minqlx.EVENT_DISPATCHERS["vote_started"].caller(player)
             if minqlx.EVENT_DISPATCHERS["vote_called"].dispatch(player, vote, args) == False:
                 return False
             return cmd
@@ -271,8 +273,15 @@ def handle_set_configstring(index, value):
         elif isinstance(res, str):
             value = res
 
+        # VOTES
+        if index == 9 and value:
+            cmd = value.split()
+            vote = cmd[0] if cmd else ""
+            args = " ".join(cmd[1:]) if len(cmd) > 1 else ""
+            minqlx.EVENT_DISPATCHERS["vote_started"].dispatch(vote, args)
+            return
         # GAME STATE CHANGES
-        if index == 0:
+        elif index == 0:
             old_cs = minqlx.parse_variables(minqlx.get_configstring(index))
             if not old_cs:
                 return
@@ -295,9 +304,8 @@ def handle_set_configstring(index, value):
                 else:
                     logger = minqlx.get_logger()
                     logger.warning("UNKNOWN GAME STATES: {} - {}".format(old_state, new_state))
-
         # ROUND COUNTDOWN AND START
-        if index == 661:
+        elif index == 661:
             cvars = minqlx.parse_variables(value)
             if cvars:
                 round_number = int(cvars["round"])
@@ -382,24 +390,24 @@ def handle_player_spawn(client_id):
 def handle_console_print(text):
     """Called whenever the server prints something to the console and when rcon is used."""
     try:
-        text = text.rstrip()
         if not text:
             return
         
         # Log console output. Removes the need to have stdout logs in addition to minqlx.log.
-        minqlx.get_logger().debug(text)
+        minqlx.get_logger().debug(text.rstrip("\n"))
 
         res = minqlx.EVENT_DISPATCHERS["console_print"].dispatch(text)
         if res == False:
             return False
-        elif isinstance(res, str):
-            text = res
 
         if _print_redirection:
             global _print_buffer
             _print_buffer += text
 
-        return res
+        if isinstance(res, str):
+            return res
+
+        return text
     except:
         minqlx.log_exception()
         return True
